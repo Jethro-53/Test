@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Creative Commons Image Finder – v2</title>
+<style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:2em;color:#222}
+    h1{margin-top:0}
+    .controls{margin-bottom:1em}
+    select,input[type=text]{padding:0.4em;font-size:1em}
+    button{padding:0.4em 0.8em;font-size:1em;cursor:pointer}
+    #results{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1em;margin-top:1em}
+    figure{margin:0;border:1px solid #ccc;padding:0.5em;border-radius:4px;background:#fafafa}
+    figure img{max-width:100%;height:auto;display:block;margin:0 0 0.5em}
+    figcaption{font-size:0.85em;line-height:1.2em}
+    .status{margin-top:0.5em;font-style:italic;min-height:1.2em}
+    .spinner{display:inline-block;width:1em;height:1em;border:2px solid #ccc;border-top-color:#666;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:-0.1em;margin-right:0.3em}
+    @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<h1>Creative Commons Image Finder <small>v2</small></h1>
+
+<div class="controls">
+    <label for="category">Category:&nbsp;</label>
+    <select id="category">
+        <option value="">– Pick a category –</option>
+        <option value="nature">Nature</option>
+        <option value="animals">Animals</option>
+        <option value="architecture">Architecture</option>
+        <option value="technology">Technology</option>
+        <option value="food">Food</option>
+        <option value="people">People</option>
+        <option value="space">Space</option>
+        <option value="art">Art</option>
+        <option value="abstract">Abstract</option>
+        <option value="travel">Travel</option>
+    </select>
+
+    &nbsp;or&nbsp;
+
+    <input type="text" id="searchBox" placeholder="Type any keywords">
+    <button id="goBtn">Search</button>
+</div>
+
+<div id="status" class="status"></div>
+<div id="results"></div>
+
+<script>
+// Allowed licence codes (all are Creative Commons or public‑domain equivalents)
+const allowedLicences = ['cc0','pdm','by','by-sa'];
+
+// Build a query string for the Openverse API (new production endpoint)
+function buildQuery(term){
+    const base = 'https://api.openverse.org/v1/images';
+    const params = new URLSearchParams({
+        q: term,
+        license: allowedLicences.join(','),
+        page_size: 40
+    });
+    return `${base}?${params.toString()}`;
+}
+
+// Verify every returned result conforms to our allowed CC licences
+function licenceOK(item){
+    return allowedLicences.includes(item.license);
+}
+
+// Render results
+function showResults(items){
+    const container = document.getElementById('results');
+    container.innerHTML = '';
+    if(!items.length){
+        container.textContent = 'No Creative Commons images found for that search.';
+        return;
+    }
+    items.forEach(it=>{
+        const fig = document.createElement('figure');
+        const link = document.createElement('a');
+        link.href = it.url;
+        link.target = '_blank';
+        const img = document.createElement('img');
+        img.src = it.thumbnail || it.url;
+        img.alt = it.title || 'Image thumbnail';
+        link.appendChild(img);
+        fig.appendChild(link);
+
+        const cap = document.createElement('figcaption');
+        const credit = it.creator ? `${it.creator}` : 'Unknown creator';
+        cap.innerHTML = `<strong>${it.title || 'Untitled'}</strong><br>
+            ${credit}<br>
+            <em>Licence&nbsp;${it.license.toUpperCase()}</em>`;
+        fig.appendChild(cap);
+        container.appendChild(fig);
+    });
+}
+
+async function search(term){
+    const status = document.getElementById('status');
+    status.innerHTML = '<span class="spinner"></span>Searching…';
+    try{
+        const resp = await fetch(buildQuery(term));
+        if(!resp.ok) throw new Error('HTTP '+resp.status);
+        const data = await resp.json();
+        // Verification: keep only items whose licence matches our whitelist
+        const safe = data.results.filter(licenceOK);
+        showResults(safe);
+        status.textContent = `Found ${safe.length} Creative Commons images`;
+    }catch(err){
+        console.error(err);
+        status.textContent = '⚠️ Error fetching results – check your internet connection or open the browser console for details.';
+    }
+}
+
+function startSearch(){
+    const cat = document.getElementById('category').value.trim();
+    const q = document.getElementById('searchBox').value.trim();
+    const term = q || cat;
+    if(!term){
+        alert('Please choose a category or type a search term.');
+        return;
+    }
+    search(term);
+}
+
+document.getElementById('goBtn').addEventListener('click', startSearch);
+
+// Enable Enter key in the search box
+document.getElementById('searchBox').addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); startSearch(); }
+});
+</script>
+</body>
+</html>
